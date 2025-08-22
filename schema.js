@@ -1,9 +1,13 @@
+
 export const typeDefs = `#graphql
+
+    scalar JSON
+
     type Game {
         id: ID! #this will stored as a string
         title: String!
         platform: [String!]!
-        reviews: [Review!]
+        reviews: [JSON!]
     }
 
     type Review {
@@ -18,16 +22,18 @@ export const typeDefs = `#graphql
         id: ID!
         name: String!
         verified: Boolean!
-        reviews: [Review!]
+        reviews: [JSON!]
     }
 
     type Query {
         games: [Game]
         game(id: ID!): Game
+        gameSkip(limit: Int, skip: Int): [Game]
         reviews: [Review]
         review(id: ID!): Review
         authors: [Author]
         author(id: ID!): Author
+        gameSort(sort: GameSortInput!): [Game]
     }
 
     type Mutation {
@@ -40,6 +46,16 @@ export const typeDefs = `#graphql
         # deleteReview(id: ID!) : [Review]
         # updateReview(id: ID!,review: UpdateReview!) : Review
 
+    }
+
+    enum SortDirection {
+        ASC
+        DESC
+    }
+
+    input GameSortInput {
+        id: SortDirection
+        title: SortDirection
     }
 
     input AddGameInput {
@@ -55,8 +71,8 @@ export const typeDefs = `#graphql
     input AddReviewInput {
         rating: Int!
         content: String!
-        game_id: ID!
-        author_id: ID!
+        game: ID!
+        author: ID!
     }
 
     input AddAuthorInput {

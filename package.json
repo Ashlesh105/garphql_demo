@@ -17,7 +17,9 @@
   },
   "dependencies": {
     "@apollo/server": "^5.0.0",
+    "dataloader": "^2.2.3",
     "graphql": "^16.11.0",
+    "graphql-type-json": "^0.3.2",
     "mongodb": "^6.18.0",
     "mongoose": "^8.17.1"
   }

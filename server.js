@@ -1,5 +1,7 @@
 import { ApolloServer } from '@apollo/server';
 import { startStandaloneServer } from '@apollo/server/standalone';
+import GraphQLJSON from 'graphql-type-json';
+import DataLoader from 'dataloader';
 
 //types
 import { typeDefs } from './schema.js';
@@ -10,7 +12,24 @@ import { Game, Review, Author } from './models/model.js';
 
 connectDB()
 
+const gameLoader = new DataLoader(async (ids) => {
+    const games = await Game.find({ _id: { $in: ids } })
+    console.log(`GameIds:${games}`)
+    return ids.map(id => games.find(game => game._id.toString() === id.toString()));
+});
+
+const authorLoader = new DataLoader(async (ids) => {
+    const authors = await Author.find({ _id: { $in: ids } })
+    return ids.map(id => authors.find(author => author._id.toString() === id.toString()));
+});
+
+const reviewLoader = new DataLoader(async(ids) => {
+    const reviews = await Review.find({_id:{$in:ids}})
+    return ids.map(id=> reviews.find(review=> review._id.toString()===id.toString()))
+})
 const resolvers = {
+
+    JSON: GraphQLJSON,
     Query: {
         games: async () => {
             const gameObj = await Game.find()
@@ -22,49 +41,59 @@ const resolvers = {
         },
         reviews: async () => {
             const reviewObj = await Review.find({})
-            // console.log(`Data:${reviewObj}`)
             return reviewObj;
         },
-        review: async (_, args) => {
-            return await Review.findById(args.id)
+        review: async (_, { id }) => {
+            return await Review.findById(id)
         },
-        authors: async()=> {
+        authors: async () => {
             return await Author.find({});
         },
-        author(_, args) {
-            // console.log(args.id)
-            const author = db.authors.find((author) => author.id === args.id);
-            // console.log(res)
-            return author;
+        author: async (_, args) => {
+            return await Review.findById(args.id)
+        },
+        gameSkip: async (_, { limit, skip }) => {
+            let game = Game.find({}).skip(skip).limit(limit)
+            console.log(game)
+            return game
+        },
+        gameSort: async (_, { sort }) => {
+            let query = Game.find({})
+            let sortOptions = {}
+            if (sort.title) {
+                sortOptions.title = sort.title === 'ASC' ? 1 : -1;
+            }
+            if (sort.id) {
+                sortOptions.id = sort.id === 'ASC' ? 1 : -1;
+            }
         },
     },
     Game: {
-        reviews: async(parent)=> {
-            return await Review.find({author_id: parent.id})
+        reviews: async (parent) => {
+            return await reviewLoader.load(parent.id)
         }
     },
     Author: {
-        reviews: async(parent) => {
-            return await Review.find({author_id: parent.id})
+        reviews: async (parent) => {
+            return await Review.find({ author: parent.id })
         }
     },
     Review: {
-        game(parent) {
-            return db.games.find((g) => g.id === parent.game_id)
+        game: async (parent) => {
+            const games = await gameLoader.load(parent.game)
+            console.log(games)
+            return games
         },
-        author(parent) {
-            return db.authors.find((a) => a.id === parent.author_id)
-        }
+        author: async (parent) => {
+            return await authorLoader.load(parent.author)
+        },
     },
-
     Mutation: {
-        deleteGame(_, args) {
-            const gameObj = () => db.games.find((game) => game.id === args.id)
-            if (!gameObj) {
-                return "game with Id not found"
-            }
-            db.games = db.games.filter((g) => g.id !== args.id) // this will create a new array excluding that array that we want to delete
-            return db.games
+        deleteGame: async (_, { id }) => {
+            const deletedGame = await Game.findByIdAndDelete(id)
+            if (!deletedGame)
+                throw new Error(`Game not deleted`)
+            return await Game.find({})
         },
 
         addGame: async (_, { game }) => {
@@ -77,13 +106,13 @@ const resolvers = {
 
         },
 
-        updateGame(_, args) {
-            db.games = db.games.map((g) => {
-                if (g.id === args.id)
-                    return { ...g, ...args.game } //In this first it will return the correct orginal obj while args.game overrides the specified element eg title or platform
-                return g
-            })
-            return db.games.find((g) => g.id === args.id)
+        updateGame: async (_, { id, game }) => {
+            const updatedGame = await Game.findByIdAndUpdate(id, game, { new: true })
+            console.log(updatedGame)
+            if (updatedGame == null) {
+                throw Error(`Game with is ${id} not found`)
+            }
+            return updatedGame
         },
 
         addReview: async (_, { review }) => {
@@ -94,14 +123,14 @@ const resolvers = {
                 throw new Error(`Error: ${error}`)
             }
         },
-        addAuthor: async (_,{author})=>{
+        addAuthor: async (_, { author }) => {
             try {
                 const newAuthor = await Author.create(author)
                 return newAuthor
             } catch (error) {
-                 throw new Error(`Error: ${error}`)
+                throw new Error(`Error: ${error}`)
             }
-        }
+        },
 
     }
 }

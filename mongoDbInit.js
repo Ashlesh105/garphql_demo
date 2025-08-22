@@ -10,6 +10,7 @@ export const connectDB = async () => {
         // await Game.insertMany(games)
         // await Review.insertMany(reviews)
         // await Author.insertMany(authors)
+        mongoose.set('debug',true)
         console.log('✅ Connected to MongoDB...');
     } catch (err) {
         console.error('❌ Could not connect to MongoDB...', err);
