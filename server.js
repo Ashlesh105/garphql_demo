@@ -1,14 +1,19 @@
 import { ApolloServer } from '@apollo/server';
+import AuthenticationError from '@apollo/server/errors';
+
 import { startStandaloneServer } from '@apollo/server/standalone';
 import GraphQLJSON from 'graphql-type-json';
 import DataLoader from 'dataloader';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv'
+dotenv.config();
 
 //types
 import { typeDefs } from './schema.js';
 //db
 import { connectDB } from './mongoDbInit.js';
 //mongoose schema for mongo db
-import { Game, Review, Author } from './models/model.js';
+import { Game, Review, Author, User } from './models/model.js';
 
 connectDB()
 
@@ -67,6 +72,19 @@ const resolvers = {
                 sortOptions.id = sort.id === 'ASC' ? 1 : -1;
             }
         },
+        generateAccessToken: async(_,{username, password}) => {
+            const newUser = await User.create({username:username,password: password});
+            if(!newUser){
+              throw new UserInput('User not created')
+            }
+            const payload =  {
+                username : newUser.username,
+                role: "admin",
+            }
+            const accessToken = jwt.sign(payload, process.env.sceret_key,{expiresIn: '1hr'})
+            const refreshToken = jwt.sign(payload, process.env.sceret_key,{expiresIn: '24hr'})
+            return { accessToken: accessToken, refreshToken: refreshToken}
+        }
     },
     Game: {
         reviews: async (parent) => {
@@ -96,8 +114,11 @@ const resolvers = {
             return await Game.find({})
         },
 
-        addGame: async (_, { game }) => {
+        addGame: async (_, { game },{user}) => {
             try {
+                if(user!='admin'){
+                   throw new AuthenticationError('Not authorized');
+                }
                 const newGame = await Game.create(game);
                 return newGame
             } catch (error) {
@@ -135,7 +156,17 @@ const resolvers = {
     }
 }
 
-
+const getUser = (token)=>{
+    try {
+        if(token){
+            jwt.verify(token, process.env.sceret_key)
+        }else {
+          throw  new UserInputError('Invalid token')
+        }
+    } catch (error) {
+       throw new UserInputError(`Something went wrong: ${error}`)
+    }
+}
 
 
 //server setup
@@ -143,10 +174,16 @@ const resolvers = {
 const server = new ApolloServer({
     typeDefs,
     resolvers,
+    context: ({req})=>{
+        const token = req.headers.authorization
+        const user = getUser(token)
+        return {user}
+    }
 });
 
 const { url } = await startStandaloneServer(server, {
     listen: { port: 4000 },
+
 });
 
 console.log(`🚀  Server ready at: ${url}`);

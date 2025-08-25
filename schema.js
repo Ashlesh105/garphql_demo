@@ -1,6 +1,4 @@
-
 export const typeDefs = `#graphql
-
     scalar JSON
 
     type Game {
@@ -25,6 +23,11 @@ export const typeDefs = `#graphql
         reviews: [JSON!]
     }
 
+    type Login {
+        accessToken: String!,
+        refreshToken: String!
+    }
+
     type Query {
         games: [Game]
         game(id: ID!): Game
@@ -34,6 +37,7 @@ export const typeDefs = `#graphql
         authors: [Author]
         author(id: ID!): Author
         gameSort(sort: GameSortInput!): [Game]
+        generateAccessToken(username: String!, password: String!): Login!
     }
 
     type Mutation {
@@ -80,14 +84,4 @@ export const typeDefs = `#graphql
         verified: Boolean!
         reviews: [AddReviewInput!]
     }
-
-
-
-    # input UpdateReview {
-    #     title: String
-    #     rating: Int
-    #     content: String
-    #     game: Game
-    #     author: Author
-    # }
 `
