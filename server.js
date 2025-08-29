@@ -1,7 +1,9 @@
 import { ApolloServer } from '@apollo/server';
-import AuthenticationError from '@apollo/server/errors';
-
 import { startStandaloneServer } from '@apollo/server/standalone';
+import { AuthenticationError,UserInputError } from 'apollo-server-errors';
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import {authDirectiveTrasnformer} from './directives/isAuthenticated.js';
+
 import GraphQLJSON from 'graphql-type-json';
 import DataLoader from 'dataloader';
 import jwt from 'jsonwebtoken';
@@ -28,9 +30,9 @@ const authorLoader = new DataLoader(async (ids) => {
     return ids.map(id => authors.find(author => author._id.toString() === id.toString()));
 });
 
-const reviewLoader = new DataLoader(async(ids) => {
-    const reviews = await Review.find({_id:{$in:ids}})
-    return ids.map(id=> reviews.find(review=> review._id.toString()===id.toString()))
+const reviewLoader = new DataLoader(async (ids) => {
+    const reviews = await Review.find({ _id: { $in: ids } })
+    return ids.map(id => reviews.find(review => review._id.toString() === id.toString()))
 })
 const resolvers = {
 
@@ -72,18 +74,18 @@ const resolvers = {
                 sortOptions.id = sort.id === 'ASC' ? 1 : -1;
             }
         },
-        generateAccessToken: async(_,{username, password}) => {
-            const newUser = await User.create({username:username,password: password});
-            if(!newUser){
-              throw new UserInput('User not created')
+        generateAccessToken: async (_, { username, password }) => {
+            const newUser = await User.create({ username: username, password: password });
+            if (!newUser) {
+                throw new UserInput('User not created')
             }
-            const payload =  {
-                username : newUser.username,
+            const payload = {
+                username: newUser.username,
                 role: "admin",
             }
-            const accessToken = jwt.sign(payload, process.env.sceret_key,{expiresIn: '1hr'})
-            const refreshToken = jwt.sign(payload, process.env.sceret_key,{expiresIn: '24hr'})
-            return { accessToken: accessToken, refreshToken: refreshToken}
+            const accessToken = jwt.sign(payload, process.env.sceret_key, { expiresIn: '1hr' })
+            const refreshToken = jwt.sign(payload, process.env.sceret_key, { expiresIn: '24hr' })
+            return { accessToken: accessToken, refreshToken: refreshToken }
         }
     },
     Game: {
@@ -114,17 +116,18 @@ const resolvers = {
             return await Game.find({})
         },
 
-        addGame: async (_, { game },{user}) => {
+        addGame: async (_, { game }) => {
+
             try {
-                if(user!='admin'){
-                   throw new AuthenticationError('Not authorized');
-                }
+                // console.log(`User:${user}`)
+        //         if (!user || user.role !== 'admin') {
+        //     throw new AuthenticationError('Not authorized');
+        // }
                 const newGame = await Game.create(game);
                 return newGame
             } catch (error) {
                 throw new Error(`Error: ${error}`)
             }
-
         },
 
         updateGame: async (_, { id, game }) => {
@@ -156,29 +159,35 @@ const resolvers = {
     }
 }
 
-const getUser = (token)=>{
+const getUser = (token) => {
     try {
-        if(token){
-            jwt.verify(token, process.env.sceret_key)
-        }else {
-          throw  new UserInputError('Invalid token')
+        console.log('hello')
+        if (token) {
+             const realToken = token.replace(/^Bearer\s+/i, '');
+           const decoded = jwt.verify(realToken, process.env.sceret_key);
+           console.log(`${decoded.role}`)
+           return {role: decoded.role,...decoded};
+        } else {
+            throw new UserInputError('Invalid token')
         }
     } catch (error) {
-       throw new UserInputError(`Something went wrong: ${error}`)
+        throw new UserInputError(`Something went wrong: ${error}`)
     }
 }
 
 
 //server setup
-
-const server = new ApolloServer({
-    typeDefs,
+const schema = makeExecutableSchema({
+     typeDefs,
     resolvers,
-    context: ({req})=>{
-        const token = req.headers.authorization
-        const user = getUser(token)
-        return {user}
-    }
+});
+
+// const transformedSchema = authDirectiveTrasnformer(schema);
+const server = new ApolloServer({
+    schema: schema,
+    context: ({ req }) => ({
+        authToken: req.headers.authorization
+    })
 });
 
 const { url } = await startStandaloneServer(server, {

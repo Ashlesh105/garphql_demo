@@ -1,5 +1,7 @@
-export const typeDefs = `#graphql
+export const typeDefs = `
     scalar JSON
+
+    directive @isAuthenticated(role: String) on FIELD_DEFINITION
 
     type Game {
         id: ID! #this will stored as a string
@@ -41,7 +43,7 @@ export const typeDefs = `#graphql
     }
 
     type Mutation {
-        addGame(game: AddGameInput!) : Game
+        addGame(game: AddGameInput!) : Game @isAuthenticated(role:"admin")
         deleteGame(id: ID!) : [Game]
         updateGame(id: ID!,game: UpdateGame!) : Game
 
